@@ -1,0 +1,48 @@
+# LLMs from Scratch - Cursor Rules
+
+## Project Context
+Building Large Language Models from scratch following Sebastian Raschka's book. This is a fork of the main repository focused on educational implementation of GPT-like models using PyTorch.
+
+## Development Environment
+- **Framework**: PyTorch (2.2.2+)
+- **Environment**: Conda
+- **Python**: 3.10-3.13
+- **Main Dependencies**: tiktoken, matplotlib, tensorflow (for comparisons), tqdm, numpy, pandas
+
+## Code Standards
+- Follow existing code patterns from the book chapters
+- Use clear, educational variable names that match the book's terminology
+- Add comments explaining mathematical concepts and model architecture decisions
+- Prefer readability over optimization (educational codebase)
+
+## Project Goals
+1. Implement GPT-like models from scratch (focusing on 124M parameter model)
+2. Integrate experiment tracking (W&B/TensorBoard) for loss visualization
+3. Load and compare with OpenAI's pretrained GPT-2 weights
+4. Focus on Chapter 5 (pretraining) with comprehensive understanding
+
+## File Structure Conventions
+- Main chapter code in `chXX/01_main-chapter-code/`
+- Bonus materials in numbered subdirectories
+- Keep notebooks (`.ipynb`) for exploration and scripts (`.py`) for production code
+- Use `previous_chapters.py` to import utilities from earlier chapters
+
+## Key Implementation Notes
+- Tokenization: Use tiktoken/BPE tokenizer
+- Model Architecture: Multi-head attention, layer normalization, feed-forward networks
+- Training: AdamW optimizer, learning rate scheduling, gradient clipping
+- Data: Text data from Project Gutenberg, tokenized and batched
+
+## Testing & Validation
+- Each chapter has `tests.py` for verification
+- Exercise solutions available in `exercise-solutions.ipynb`
+- Compare outputs with reference implementations
+
+## Future Integrations
+- Wandb/TensorBoard logging for:
+  - Training/validation losses
+  - Learning rate schedules
+  - Gradient norms
+  - Sample generations
+- Model checkpointing during training
+- Performance profiling and optimization tracking
