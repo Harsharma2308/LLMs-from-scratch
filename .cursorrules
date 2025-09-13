@@ -4,6 +4,11 @@
 - ✅ Conda environment `llms-scratch` created with PyTorch 2.8.0 + CUDA 12.8
 - ✅ Basic training pipeline tested with TensorBoard integration 
 - ✅ Downloaded "The Verdict" dataset (5K tokens) for Chapter 5
+- ✅ Created 2.8MB training dataset from 5 classic books (777K tokens)
+- ✅ Trained GPT-124M model: 11→5 loss in 2.6 minutes (saved checkpoint: 623MB)
+- ✅ Integrated W&B + TensorBoard dual logging system (both enabled by default)
+- ✅ Fixed W&B step counter bug (now synced with TensorBoard: 0, 100, 200...)
+- ✅ Fixed Unicode text display in W&B (no more garbled quotes/punctuation)
 - 🔄 Working on Chapter 5: Understanding pretraining mechanics
 - 📝 Next: Load OpenAI GPT-2 weights and compare with our training
 
