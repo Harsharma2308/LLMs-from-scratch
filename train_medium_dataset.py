@@ -148,9 +148,9 @@ def log_metrics(writer, use_wandb, metrics, step, generated_text=None):
         
         # Add generated text if provided
         if generated_text is not None:
-            # Fix Unicode and log as simple string
+            # Fix Unicode and log as HTML for proper display
             clean_text = fix_unicode_for_display(generated_text[:200])
-            wandb_metrics['generated_text'] = clean_text
+            wandb_metrics['generated_text'] = wandb.Html(f'<pre>{clean_text}</pre>')
         
         # Use W&B's step parameter instead of adding to metrics
         wandb.log(wandb_metrics, step=step)
