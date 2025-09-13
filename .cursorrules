@@ -6,8 +6,17 @@ Building Large Language Models from scratch following Sebastian Raschka's book. 
 ## Development Environment
 - **Framework**: PyTorch (2.2.2+)
 - **Environment**: Conda
+- **Conda Environment Name**: `llms-scratch`
 - **Python**: 3.10-3.13
 - **Main Dependencies**: tiktoken, matplotlib, tensorflow (for comparisons), tqdm, numpy, pandas
+
+## Environment Setup
+To activate the conda environment:
+```bash
+conda activate llms-scratch
+```
+
+All code should be run within this environment to ensure dependency compatibility.
 
 ## Code Standards
 - Follow existing code patterns from the book chapters
