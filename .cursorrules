@@ -1,5 +1,12 @@
 # LLMs from Scratch - Cursor Rules
 
+## Current Status
+- ✅ Conda environment `llms-scratch` created with PyTorch 2.8.0 + CUDA 12.8
+- ✅ Basic training pipeline tested with TensorBoard integration 
+- ✅ Downloaded "The Verdict" dataset (5K tokens) for Chapter 5
+- 🔄 Working on Chapter 5: Understanding pretraining mechanics
+- 📝 Next: Load OpenAI GPT-2 weights and compare with our training
+
 ## Project Context
 Building Large Language Models from scratch following Sebastian Raschka's book. This is a fork of the main repository focused on educational implementation of GPT-like models using PyTorch.
 
@@ -55,3 +62,7 @@ All code should be run within this environment to ensure dependency compatibilit
   - Sample generations
 - Model checkpointing during training
 - Performance profiling and optimization tracking
+
+## Notes
+- Keep the "Current Status" section updated as progress is made
+- This helps track where we are in the learning journey and what's next
