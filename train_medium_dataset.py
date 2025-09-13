@@ -236,7 +236,7 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
     # Training loop
     print("\nStarting training...")
     global_step = 0
-    start_time = time.time()
+    training_start_time = time.time()
     
     for epoch in range(training_config["num_epochs"]):
         model.train()
@@ -270,6 +270,7 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
             
             # Evaluation
             if global_step % training_config["eval_interval"] == 0:
+                eval_start_time = time.time()
                 model.eval()
                 
                 train_loss = calc_loss_loader(train_loader, model, device, num_batches=5)
@@ -287,9 +288,10 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
                 }
                 log_metrics(writer, use_wandb, metrics, global_step, generated_text=sample_text)
                 
-                elapsed = time.time() - start_time
+                eval_time = time.time() - eval_start_time
+                total_time = time.time() - training_start_time
                 print(f"Step {global_step} | Train loss: {train_loss:.4f} | "
-                      f"Val loss: {val_loss:.4f} | Time: {elapsed:.1f}s")
+                      f"Val loss: {val_loss:.4f} | Eval time: {eval_time:.1f}s | Total: {total_time:.1f}s")
                 print(f"Sample: {sample_text[:100]}...")
                 print("-" * 80)
                 
@@ -320,7 +322,7 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
     print(f"\nTraining completed!")
     print(f"Final train loss: {final_train_loss:.4f}")
     print(f"Final validation loss: {final_val_loss:.4f}")
-    print(f"Total time: {time.time() - start_time:.1f}s")
+    print(f"Total training time: {time.time() - training_start_time:.1f}s")
     
     # Save final model
     final_path = "model_checkpoints/model_final.pt"
