@@ -125,12 +125,8 @@ def log_metrics(writer, use_wandb, metrics, step, generated_text=None):
         
         # Add generated text if provided
         if generated_text is not None:
-            wandb_metrics['generated_text'] = generated_text[:200]
-            # Also log as a table for history tracking
-            wandb_metrics['generated_text_table'] = wandb.Table(
-                columns=['step', 'loss', 'text'],
-                data=[[step, f"{metrics.get('Loss/validation', 0):.4f}", generated_text[:200]]]
-            )
+            # Use wandb.Text for proper text logging
+            wandb_metrics['generated_text'] = wandb.Text(generated_text[:200])
         
         # Use W&B's step parameter instead of adding to metrics
         wandb.log(wandb_metrics, step=step)
