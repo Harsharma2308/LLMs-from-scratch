@@ -107,6 +107,29 @@ def setup_tensorboard(timestamp):
     print(f"  ✅ TensorBoard logging enabled → runs/medium_dataset_{timestamp}")
     return writer
 
+def fix_unicode_for_display(text):
+    """Fix common Unicode issues in text for clean display"""
+    # Replace common problematic Unicode characters with ASCII equivalents
+    replacements = {
+        '\u2019': "'",  # Right single quotation mark
+        '\u2018': "'",  # Left single quotation mark
+        '\u201c': '"',  # Left double quotation mark
+        '\u201d': '"',  # Right double quotation mark
+        '\u2014': '--', # Em dash
+        '\u2013': '-',  # En dash
+        '\u2026': '...', # Ellipsis
+        '\xa0': ' ',    # Non-breaking space
+        '\u200b': '',   # Zero-width space
+    }
+    
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    # Remove any remaining non-ASCII characters
+    text = ''.join(char if ord(char) < 128 else '?' for char in text)
+    
+    return text
+
 def log_metrics(writer, use_wandb, metrics, step, generated_text=None):
     """Log metrics to both TensorBoard and W&B"""
     # TensorBoard logging
@@ -125,8 +148,9 @@ def log_metrics(writer, use_wandb, metrics, step, generated_text=None):
         
         # Add generated text if provided
         if generated_text is not None:
-            # Use wandb.Text for proper text logging
-            wandb_metrics['generated_text'] = wandb.Text(generated_text[:200])
+            # Fix Unicode and log as simple string
+            clean_text = fix_unicode_for_display(generated_text[:200])
+            wandb_metrics['generated_text'] = clean_text
         
         # Use W&B's step parameter instead of adding to metrics
         wandb.log(wandb_metrics, step=step)
