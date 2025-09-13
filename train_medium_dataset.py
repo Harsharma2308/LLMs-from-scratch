@@ -4,13 +4,16 @@ Training script for medium-sized dataset with comprehensive logging
 
 import torch
 import tiktoken
-from torch.utils.tensorboard import SummaryWriter
 import wandb
 import time
 import os
 import sys
 from datetime import datetime
 import argparse
+
+# Suppress TensorFlow warnings from TensorBoard
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 # Add ch05 to path
 sys.path.append('ch05/01_main-chapter-code')
@@ -103,6 +106,7 @@ def setup_wandb(config, training_config):
 
 def setup_tensorboard(timestamp):
     """Initialize TensorBoard writer"""
+    from torch.utils.tensorboard import SummaryWriter
     writer = SummaryWriter(f'runs/medium_dataset_{timestamp}')
     print(f"  ✅ TensorBoard logging enabled → runs/medium_dataset_{timestamp}")
     return writer
@@ -168,11 +172,10 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
     print(f"Using device: {device}")
     
     # Initialize logging systems
-    print("\n📊 Logging configuration:")
+    if use_wandb or use_tensorboard:
+        print("\n📊 Logging:")
     if use_wandb:
         setup_wandb(config, training_config)
-    else:
-        print("  ❌ W&B logging disabled")
     
     # Load data
     print("\nLoading training data...")
@@ -218,13 +221,11 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
         weight_decay=training_config["weight_decay"]
     )
     
-    # Setup TensorBoard
+    # Initialize TensorBoard if enabled
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     writer = None
     if use_tensorboard:
         writer = setup_tensorboard(timestamp)
-    else:
-        print("  ❌ TensorBoard logging disabled")
     
     # Calculate initial losses
     print("\nCalculating initial losses...")
@@ -234,7 +235,7 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
     print(f"Initial val loss: {val_loss:.4f}")
     
     # Training loop
-    print("\nStarting training...")
+    print(f"\nStarting training for {training_config['num_epochs']} epochs...")
     global_step = 0
     training_start_time = time.time()
     
@@ -346,7 +347,7 @@ if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Train GPT model on medium dataset')
     parser.add_argument('--no-wandb', action='store_true', help='Disable Weights & Biases logging')
-    parser.add_argument('--no-tensorboard', action='store_true', help='Disable TensorBoard logging')
+    parser.add_argument('--tensorboard', action='store_true', help='Enable TensorBoard logging (default: disabled)')
     parser.add_argument('--epochs', type=int, default=1, help='Number of epochs to train')
     parser.add_argument('--batch-size', type=int, default=8, help='Batch size for training')
     args = parser.parse_args()
@@ -362,5 +363,5 @@ if __name__ == "__main__":
         GPT_CONFIG_124M,
         TRAINING_CONFIG,
         use_wandb=not args.no_wandb,  # W&B enabled by default
-        use_tensorboard=not args.no_tensorboard  # TensorBoard enabled by default
+        use_tensorboard=args.tensorboard  # TensorBoard disabled by default
     )
