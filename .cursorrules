@@ -8,7 +8,9 @@
 - ✅ Trained GPT-124M model: 11→5 loss in 2.6 minutes (saved checkpoint: 623MB)
 - ✅ Integrated W&B + TensorBoard dual logging system (both enabled by default)
 - ✅ Fixed W&B step counter bug (now synced with TensorBoard: 0, 100, 200...)
-- ✅ Fixed Unicode text display in W&B (no more garbled quotes/punctuation)
+- ✅ Fixed Unicode text display in W&B (clean ASCII conversion for quotes/punctuation)
+- ✅ Fixed timing display (now shows per-eval time, not cumulative)
+- ⚠️ CUDA issue in Cursor IDE (works in external terminal)
 - 🔄 Working on Chapter 5: Understanding pretraining mechanics
 - 📝 Next: Load OpenAI GPT-2 weights and compare with our training
 
