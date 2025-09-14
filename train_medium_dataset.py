@@ -159,7 +159,7 @@ def log_metrics(writer, use_wandb, metrics, step, generated_text=None):
         # Use W&B's step parameter instead of adding to metrics
         wandb.log(wandb_metrics, step=step)
 
-def train_model(train_file, val_file, config, training_config, use_wandb=True, use_tensorboard=True):
+def train_model(train_file, val_file, config, training_config, use_wandb=True, use_tensorboard=True, force_cpu=False):
     """Main training function with W&B (default) and TensorBoard logging
     
     Why both? 
@@ -167,8 +167,21 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
     - W&B: Better for experiment tracking, sharing results, and cloud storage
     """
     
-    # Setup
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Setup - GPU/Device Check
+    if not force_cpu:
+        if not torch.cuda.is_available():
+            print("❌ ERROR: CUDA is not available! GPU training was requested but no GPU found.")
+            print("   Options:")
+            print("   1. Fix your CUDA environment and try again")
+            print("   2. Run with --force-cpu flag to train on CPU (not recommended)")
+            print(f"   PyTorch version: {torch.__version__}")
+            sys.exit(1)
+        device = torch.device("cuda")
+        print(f"✅ Using GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        device = torch.device("cpu")
+        print("⚠️  WARNING: Training on CPU (--force-cpu flag was used)")
+    
     print(f"Using device: {device}")
     
     # Initialize logging systems
@@ -262,6 +275,19 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
                 )
             
             optimizer.step()
+            global_step += 1
+            
+            # CPU test mode: exit after first step
+            if device.type == 'cpu' and batch_idx == 0 and epoch == 0:
+                print("\n⚠️  CPU MODE TEST: Successfully completed 1 training step on CPU.")
+                print("   Exiting early to avoid long CPU training. Use an external terminal with GPU for full training.")
+                log_metrics(writer, use_wandb, {
+                    'Loss/train_batch': loss.item(),
+                    'learning_rate': optimizer.param_groups[0]['lr']
+                }, global_step)
+                if use_wandb:
+                    wandb.finish()
+                sys.exit(0)
             
             # Log batch metrics
             log_metrics(writer, use_wandb, {
@@ -311,8 +337,6 @@ def train_model(train_file, val_file, config, training_config, use_wandb=True, u
                     'val_loss': val_loss,
                 }, checkpoint_path)
                 print(f"Saved checkpoint: {checkpoint_path}")
-            
-            global_step += 1
     
     # Final evaluation
     print("\nFinal evaluation...")
@@ -350,6 +374,7 @@ if __name__ == "__main__":
     parser.add_argument('--tensorboard', action='store_true', help='Enable TensorBoard logging (default: disabled)')
     parser.add_argument('--epochs', type=int, default=1, help='Number of epochs to train')
     parser.add_argument('--batch-size', type=int, default=8, help='Batch size for training')
+    parser.add_argument('--force-cpu', action='store_true', help='Force training on CPU even if GPU is available')
     args = parser.parse_args()
     
     # Update config with command line args
@@ -363,5 +388,6 @@ if __name__ == "__main__":
         GPT_CONFIG_124M,
         TRAINING_CONFIG,
         use_wandb=not args.no_wandb,  # W&B enabled by default
-        use_tensorboard=args.tensorboard  # TensorBoard disabled by default
+        use_tensorboard=args.tensorboard,  # TensorBoard disabled by default
+        force_cpu=args.force_cpu  # Force CPU training if needed
     )
