@@ -11,6 +11,8 @@
 - ✅ Fixed Unicode text display in W&B (clean ASCII conversion for quotes/punctuation)
 - ✅ Fixed timing display (now shows per-eval time, not cumulative)
 - ⚠️ CUDA issue in Cursor IDE (works in external terminal)
+- ✅ Added GPU requirement check (fails with clear error if no GPU)
+- ✅ Added --force-cpu flag for testing (exits after 1 step to prevent long waits)
 - 🔄 Working on Chapter 5: Understanding pretraining mechanics
 - 📝 Next: Load OpenAI GPT-2 weights and compare with our training
 
