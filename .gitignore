@@ -1,3 +1,15 @@
+# Model weights and checkpoints
+gpt2_weights/
+*.pt
+*.pth
+*.safetensors
+model_checkpoints/
+
+# Training logs and runs
+wandb/
+runs/
+logs/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -6,24 +18,8 @@ __pycache__/
 .Python
 env/
 venv/
-ENV/
-
-# PyTorch
-*.pth
-*.pt
-model_checkpoints/
-
-# Experiment tracking
-wandb/
-runs/
-logs/
-*.tfevents.*
-
-# Data
-training_data/
-*.txt
-!requirements.txt
-!the-verdict.txt
+.venv
+.ipynb_checkpoints/
 
 # IDE
 .vscode/
@@ -35,13 +31,11 @@ training_data/
 .DS_Store
 Thumbs.db
 
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb_checkpoints
+# Temporary files
+*.tmp
+*.bak
+*~
 
-# Misc
-*.log
-*.csv
-*.json
-!package.json
-!tsconfig.json
+# Large datasets (if any)
+*.tar.gz
+*.zip
