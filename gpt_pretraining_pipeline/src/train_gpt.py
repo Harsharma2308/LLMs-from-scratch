@@ -1,0 +1,405 @@
+"""
+Training script for medium-sized dataset with comprehensive logging
+"""
+
+import torch
+import tiktoken
+import wandb
+import time
+import os
+import sys
+from datetime import datetime
+import argparse
+from pathlib import Path
+
+# Suppress TensorFlow warnings from TensorBoard
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+# Add project root to path for chapter imports
+project_root = Path(__file__).parent.parent.parent
+sys.path.append(str(project_root))
+
+# Import from chapter 5 (using importlib for directory with numbers)
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    "previous_chapters", 
+    str(project_root / "ch05" / "01_main-chapter-code" / "previous_chapters.py")
+)
+previous_chapters = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(previous_chapters)
+GPTModel = previous_chapters.GPTModel
+create_dataloader_v1 = previous_chapters.create_dataloader_v1
+
+# Configuration
+GPT_CONFIG_124M = {
+    "vocab_size": 50257,
+    "context_length": 256,
+    "emb_dim": 768,
+    "n_heads": 12,
+    "n_layers": 12,
+    "drop_rate": 0.1,
+    "qkv_bias": False
+}
+
+TRAINING_CONFIG = {
+    "batch_size": 8,
+    "learning_rate": 5e-4,
+    "num_epochs": 1,
+    "eval_interval": 100,
+    "save_interval": 1000,
+    "warmup_steps": 100,
+    "weight_decay": 0.1,
+    "grad_clip": 1.0,
+}
+
+def calc_loss_loader(data_loader, model, device, num_batches=None):
+    """Calculate average loss over data loader"""
+    total_loss = 0.
+    total_batches = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for i, (inputs, targets) in enumerate(data_loader):
+            if num_batches and i >= num_batches:
+                break
+            inputs, targets = inputs.to(device), targets.to(device)
+            logits = model(inputs)
+            loss = torch.nn.functional.cross_entropy(
+                logits.flatten(0, 1), targets.flatten()
+            )
+            total_loss += loss.item()
+            total_batches += 1
+    
+    return total_loss / total_batches if total_batches > 0 else float('inf')
+
+def generate_sample(model, tokenizer, device, start_text="The", max_tokens=50):
+    """Generate sample text from the model"""
+    model.eval()
+    
+    tokens = tokenizer.encode(start_text)
+    input_ids = torch.tensor(tokens).unsqueeze(0).to(device)
+    
+    with torch.no_grad():
+        for _ in range(max_tokens):
+            logits = model(input_ids)
+            next_token_logits = logits[0, -1, :]
+            
+            # Apply temperature
+            next_token_logits = next_token_logits / 0.8
+            
+            # Sample from distribution
+            probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
+            next_token_id = torch.multinomial(probs, num_samples=1).item()
+            
+            input_ids = torch.cat([input_ids, torch.tensor([[next_token_id]]).to(device)], dim=1)
+            
+            # Truncate if exceeding context length
+            if input_ids.shape[1] > GPT_CONFIG_124M["context_length"]:
+                input_ids = input_ids[:, -GPT_CONFIG_124M["context_length"]:]
+    
+    return tokenizer.decode(input_ids[0].cpu().tolist())
+
+def setup_wandb(config, training_config):
+    """Initialize Weights & Biases with project configuration"""
+    wandb.init(
+        project="LLMs-from-scratch",
+        name=f"gpt-124m-{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        config={
+            **config,
+            **training_config,
+            "dataset": "5-classic-books",
+            "model": "GPT-124M",
+            "total_params": sum(p.numel() for p in GPTModel(config).parameters())
+        },
+        tags=["gpt-124m", "pretraining", "chapter5"]
+    )
+    print("  ✅ W&B logging enabled")
+
+def setup_tensorboard(timestamp):
+    """Initialize TensorBoard writer"""
+    from torch.utils.tensorboard import SummaryWriter
+    writer = SummaryWriter(f'runs/medium_dataset_{timestamp}')
+    print(f"  ✅ TensorBoard logging enabled → runs/medium_dataset_{timestamp}")
+    return writer
+
+def fix_unicode_for_display(text):
+    """Fix common Unicode issues in text for clean display"""
+    # Replace common problematic Unicode characters with ASCII equivalents
+    replacements = {
+        '\u2019': "'",  # Right single quotation mark
+        '\u2018': "'",  # Left single quotation mark
+        '\u201c': '"',  # Left double quotation mark
+        '\u201d': '"',  # Right double quotation mark
+        '\u2014': '--', # Em dash
+        '\u2013': '-',  # En dash
+        '\u2026': '...', # Ellipsis
+        '\xa0': ' ',    # Non-breaking space
+        '\u200b': '',   # Zero-width space
+    }
+    
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    # Remove any remaining non-ASCII characters
+    text = ''.join(char if ord(char) < 128 else '?' for char in text)
+    
+    return text
+
+def log_metrics(writer, use_wandb, metrics, step, generated_text=None):
+    """Log metrics to both TensorBoard and W&B"""
+    # TensorBoard logging
+    if writer:
+        for key, value in metrics.items():
+            if value is not None and isinstance(value, (int, float)):
+                writer.add_scalar(key, value, step)
+    
+    # W&B logging
+    if use_wandb:
+        wandb_metrics = {}
+        for k, v in metrics.items():
+            if v is not None and isinstance(v, (int, float)):
+                # Convert metric names for W&B (replace / with _)
+                wandb_metrics[k.replace('/', '_')] = v
+        
+        # Add generated text if provided
+        if generated_text is not None:
+            # Fix Unicode and log as HTML for proper display
+            clean_text = fix_unicode_for_display(generated_text[:200])
+            wandb_metrics['generated_text'] = wandb.Html(f'<pre>{clean_text}</pre>')
+        
+        # Use W&B's step parameter instead of adding to metrics
+        wandb.log(wandb_metrics, step=step)
+
+def train_model(train_file, val_file, config, training_config, use_wandb=True, use_tensorboard=True, force_cpu=False):
+    """Main training function with W&B (default) and TensorBoard logging
+    
+    Why both? 
+    - TensorBoard: Great for local real-time monitoring during training
+    - W&B: Better for experiment tracking, sharing results, and cloud storage
+    """
+    
+    # Setup - GPU/Device Check
+    if not force_cpu:
+        if not torch.cuda.is_available():
+            print("❌ ERROR: CUDA is not available! GPU training was requested but no GPU found.")
+            print("   Options:")
+            print("   1. Fix your CUDA environment and try again")
+            print("   2. Run with --force-cpu flag to train on CPU (not recommended)")
+            print(f"   PyTorch version: {torch.__version__}")
+            sys.exit(1)
+        device = torch.device("cuda")
+        print(f"✅ Using GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        device = torch.device("cpu")
+        print("⚠️  WARNING: Training on CPU (--force-cpu flag was used)")
+    
+    print(f"Using device: {device}")
+    
+    # Initialize logging systems
+    if use_wandb or use_tensorboard:
+        print("\n📊 Logging:")
+    if use_wandb:
+        setup_wandb(config, training_config)
+    
+    # Load data
+    print("\nLoading training data...")
+    with open(train_file, 'r', encoding='utf-8') as f:
+        train_text = f.read()
+    with open(val_file, 'r', encoding='utf-8') as f:
+        val_text = f.read()
+    
+    tokenizer = tiktoken.get_encoding("gpt2")
+    train_tokens = tokenizer.encode(train_text)
+    val_tokens = tokenizer.encode(val_text)
+    
+    print(f"Train tokens: {len(train_tokens):,}")
+    print(f"Val tokens: {len(val_tokens):,}")
+    
+    # Create data loaders
+    train_loader = create_dataloader_v1(
+        train_text,
+        batch_size=training_config["batch_size"],
+        max_length=config["context_length"],
+        stride=config["context_length"],
+        drop_last=True,
+        shuffle=True
+    )
+    
+    val_loader = create_dataloader_v1(
+        val_text,
+        batch_size=training_config["batch_size"],
+        max_length=config["context_length"],
+        stride=config["context_length"],
+        drop_last=False,
+        shuffle=False
+    )
+    
+    print(f"Train batches: {len(train_loader)}")
+    print(f"Val batches: {len(val_loader)}")
+    
+    # Initialize model
+    model = GPTModel(config).to(device)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=training_config["learning_rate"],
+        weight_decay=training_config["weight_decay"]
+    )
+    
+    # Initialize TensorBoard if enabled
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    writer = None
+    if use_tensorboard:
+        writer = setup_tensorboard(timestamp)
+    
+    # Calculate initial losses
+    print("\nCalculating initial losses...")
+    train_loss = calc_loss_loader(train_loader, model, device, num_batches=5)
+    val_loss = calc_loss_loader(val_loader, model, device, num_batches=5)
+    print(f"Initial train loss: {train_loss:.4f}")
+    print(f"Initial val loss: {val_loss:.4f}")
+    
+    # Training loop
+    print(f"\nStarting training for {training_config['num_epochs']} epochs...")
+    global_step = 0
+    training_start_time = time.time()
+    
+    for epoch in range(training_config["num_epochs"]):
+        model.train()
+        
+        for batch_idx, (inputs, targets) in enumerate(train_loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            # Forward pass
+            logits = model(inputs)
+            loss = torch.nn.functional.cross_entropy(
+                logits.flatten(0, 1), targets.flatten()
+            )
+            
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            
+            # Gradient clipping
+            if training_config["grad_clip"] > 0:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), training_config["grad_clip"]
+                )
+            
+            optimizer.step()
+            global_step += 1
+            
+            # CPU test mode: exit after first step
+            if device.type == 'cpu' and batch_idx == 0 and epoch == 0:
+                print("\n⚠️  CPU MODE TEST: Successfully completed 1 training step on CPU.")
+                print("   Exiting early to avoid long CPU training. Use an external terminal with GPU for full training.")
+                log_metrics(writer, use_wandb, {
+                    'Loss/train_batch': loss.item(),
+                    'learning_rate': optimizer.param_groups[0]['lr']
+                }, global_step)
+                if use_wandb:
+                    wandb.finish()
+                sys.exit(0)
+            
+            # Log batch metrics
+            log_metrics(writer, use_wandb, {
+                'Loss/train_batch': loss.item(),
+                'learning_rate': optimizer.param_groups[0]['lr']
+            }, global_step)
+            
+            # Evaluation
+            if global_step % training_config["eval_interval"] == 0:
+                eval_start_time = time.time()
+                model.eval()
+                
+                train_loss = calc_loss_loader(train_loader, model, device, num_batches=5)
+                val_loss = calc_loss_loader(val_loader, model, device, num_batches=5)
+                
+                # Generate sample
+                sample_text = generate_sample(model, tokenizer, device)
+                
+                # Log evaluation metrics and generated text
+                metrics = {
+                    'Loss/train': train_loss,
+                    'Loss/validation': val_loss,
+                    'perplexity/train': torch.exp(torch.tensor(train_loss)).item(),
+                    'perplexity/val': torch.exp(torch.tensor(val_loss)).item(),
+                }
+                log_metrics(writer, use_wandb, metrics, global_step, generated_text=sample_text)
+                
+                eval_time = time.time() - eval_start_time
+                total_time = time.time() - training_start_time
+                print(f"Step {global_step} | Train loss: {train_loss:.4f} | "
+                      f"Val loss: {val_loss:.4f} | Eval time: {eval_time:.1f}s | Total: {total_time:.1f}s")
+                print(f"Sample: {sample_text[:100]}...")
+                print("-" * 80)
+                
+                model.train()
+            
+            # Save checkpoint
+            if global_step % training_config["save_interval"] == 0 and global_step > 0:
+                checkpoint_path = f"model_checkpoints/model_step_{global_step}.pt"
+                os.makedirs("model_checkpoints", exist_ok=True)
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'global_step': global_step,
+                    'config': config,
+                    'train_loss': train_loss,
+                    'val_loss': val_loss,
+                }, checkpoint_path)
+                print(f"Saved checkpoint: {checkpoint_path}")
+    
+    # Final evaluation
+    print("\nFinal evaluation...")
+    model.eval()
+    final_train_loss = calc_loss_loader(train_loader, model, device)
+    final_val_loss = calc_loss_loader(val_loader, model, device)
+    
+    print(f"\nTraining completed!")
+    print(f"Final train loss: {final_train_loss:.4f}")
+    print(f"Final validation loss: {final_val_loss:.4f}")
+    print(f"Total training time: {time.time() - training_start_time:.1f}s")
+    
+    # Save final model
+    final_path = "model_checkpoints/model_final.pt"
+    torch.save(model.state_dict(), final_path)
+    print(f"Final model saved to: {final_path}")
+    
+    if writer:
+        writer.close()
+    
+    # Log final metrics
+    if use_wandb:
+        wandb.summary['final_train_loss'] = final_train_loss
+        wandb.summary['final_val_loss'] = final_val_loss
+        wandb.summary['final_perplexity_train'] = torch.exp(torch.tensor(final_train_loss)).item()
+        wandb.summary['final_perplexity_val'] = torch.exp(torch.tensor(final_val_loss)).item()
+        wandb.finish()
+    
+    return model, final_train_loss, final_val_loss
+
+if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Train GPT model on medium dataset')
+    parser.add_argument('--no-wandb', action='store_true', help='Disable Weights & Biases logging')
+    parser.add_argument('--tensorboard', action='store_true', help='Enable TensorBoard logging (default: disabled)')
+    parser.add_argument('--epochs', type=int, default=1, help='Number of epochs to train')
+    parser.add_argument('--batch-size', type=int, default=8, help='Batch size for training')
+    parser.add_argument('--force-cpu', action='store_true', help='Force training on CPU even if GPU is available')
+    args = parser.parse_args()
+    
+    # Update config with command line args
+    TRAINING_CONFIG['num_epochs'] = args.epochs
+    TRAINING_CONFIG['batch_size'] = args.batch_size
+    
+    # Train on the medium dataset
+    model, train_loss, val_loss = train_model(
+        str(project_root / "training_data" / "train.txt"),
+        str(project_root / "training_data" / "val.txt"),
+        GPT_CONFIG_124M,
+        TRAINING_CONFIG,
+        use_wandb=not args.no_wandb,  # W&B enabled by default
+        use_tensorboard=args.tensorboard,  # TensorBoard disabled by default
+        force_cpu=args.force_cpu  # Force CPU training if needed
+    )

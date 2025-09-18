@@ -197,6 +197,20 @@ Several folders contain optional materials as a bonus for interested readers:
 <br>
 &nbsp;
 
+## 📚 Learnings Hub
+
+All insights, guides, and lessons learned during this journey are organized in the [learnings](./learnings) folder:
+
+- **[Training Pipeline Learnings](./learnings/01_training_pipeline_learnings.md)** - GPU optimization, perplexity insights, performance metrics
+- **[Pretrained Weights Guide](./learnings/02_pretrained_weights_guide.md)** - Methods for loading OpenAI GPT-2 weights
+- **[Key Code Snippets](./learnings/03_key_code_snippets.md)** - Reusable patterns and implementations
+- **[Troubleshooting Guide](./learnings/04_troubleshooting_guide.md)** - Common issues and solutions
+
+View the complete [Learnings Index](./learnings/README.md) for quick navigation.
+
+<br>
+&nbsp;
+
 ## Questions, Feedback, and Contributing to This Repository
 
 

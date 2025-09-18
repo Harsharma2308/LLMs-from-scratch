@@ -1,20 +1,24 @@
 # LLMs from Scratch - Cursor Rules
 
 ## Current Status
-- ✅ Conda environment `llms-scratch` created with PyTorch 2.8.0 + CUDA 12.8
+- ✅ Conda environment `llms-scratch` created with PyTorch 2.10.0.dev+cu128
 - ✅ Basic training pipeline tested with TensorBoard integration 
 - ✅ Downloaded "The Verdict" dataset (5K tokens) for Chapter 5
 - ✅ Created 2.8MB training dataset from 5 classic books (777K tokens)
-- ✅ Trained GPT-124M model: 11→5 loss in 2.6 minutes (saved checkpoint: 623MB)
+- ✅ Trained GPT-124M model: 11→5 loss in 2.5 minutes (saved checkpoint: 623MB)
 - ✅ Integrated W&B + TensorBoard dual logging system (both enabled by default)
 - ✅ Fixed W&B step counter bug (now synced with TensorBoard: 0, 100, 200...)
 - ✅ Fixed Unicode text display in W&B (clean ASCII conversion for quotes/punctuation)
 - ✅ Fixed timing display (now shows per-eval time, not cumulative)
-- ⚠️ CUDA issue in Cursor IDE (works in external terminal)
+- ✅ Fixed CUDA issue - resolved with system reboot (RTX 3500 GPU working!)
 - ✅ Added GPU requirement check (fails with clear error if no GPU)
 - ✅ Added --force-cpu flag for testing (exits after 1 step to prevent long waits)
-- 🔄 Working on Chapter 5: Understanding pretraining mechanics
-- 📝 Next: Load OpenAI GPT-2 weights and compare with our training
+- ✅ Explored loading OpenAI GPT-2 pretrained weights (4 methods)
+- ✅ Downloaded and tested GPT-2 124M weights from HuggingFace (703MB)
+- ✅ Compared our model (777K tokens) vs OpenAI's (40GB text) - huge quality difference!
+- ✅ Created comprehensive guide: PRETRAINED_WEIGHTS_GUIDE.md
+- 🔄 Working on Chapter 5: Understanding weight conversion and model architecture
+- 📝 Next: Fine-tuning pretrained models (Chapter 6)
 
 ## Project Context
 Building Large Language Models from scratch following Sebastian Raschka's book. This is a fork of the main repository focused on educational implementation of GPT-like models using PyTorch.
@@ -63,6 +67,13 @@ All code should be run within this environment to ensure dependency compatibilit
 - Exercise solutions available in `exercise-solutions.ipynb`
 - Compare outputs with reference implementations
 
+## Key Learnings About Pretrained Weights
+- **PyTorch State Dict Method**: Recommended - use pre-converted weights from HuggingFace
+- **Weight URL**: `https://huggingface.co/rasbt/gpt2-from-scratch-pytorch/resolve/main/gpt2-small-124M.pth`
+- **Key Transformations**: Split QKV matrices, transpose weights, remap parameter names
+- **Quality Gap**: Pretrained (40GB data) vs our model (777K tokens) shows massive difference
+- **Bias Note**: OpenAI uses `qkv_bias=True`, we typically use `False`
+
 ## Future Integrations
 - Wandb/TensorBoard logging for:
   - Training/validation losses
@@ -71,6 +82,7 @@ All code should be run within this environment to ensure dependency compatibilit
   - Sample generations
 - Model checkpointing during training
 - Performance profiling and optimization tracking
+- Fine-tuning pretrained models on custom datasets
 
 ## Notes
 - Keep the "Current Status" section updated as progress is made
